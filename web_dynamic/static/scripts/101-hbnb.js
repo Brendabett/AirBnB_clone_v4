@@ -1,128 +1,138 @@
-$(document).ready(init);
+$(() => {
+    const checkedAmenities = {};
+    const checkedStates = {};
+    const checkedCities = {};
+    const checkedLocations = {};
+    const users = {};
 
-const HOST = '0.0.0.0';
-const amenityObj = {};
-const stateObj = {};
-const cityObj = {};
-let obj = {};
-
-function init () {
-  $('.amenities .popover input').change(function () { obj = amenityObj; checkedObjects.call(this, 1); });
-  $('.state_input').change(function () { obj = stateObj; checkedObjects.call(this, 2); });
-  $('.city_input').change(function () { obj = cityObj; checkedObjects.call(this, 3); });
-  apiStatus();
-  searchPlaces();
-  showReviews();
-}
-
-function checkedObjects (nObject) {
-  if ($(this).is(':checked')) {
-    obj[$(this).attr('data-name')] = $(this).attr('data-id');
-  } else if ($(this).is(':not(:checked)')) {
-    delete obj[$(this).attr('data-name')];
-  }
-  const names = Object.keys(obj);
-  if (nObject === 1) {
-    $('.amenities h4').text(names.sort().join(', '));
-  } else if (nObject === 2) {
-    $('.locations h4').text(names.sort().join(', '));
-  }
-}
-
-function apiStatus () {
-  const API_URL = `http://${HOST}:5001/api/v1/status/`;
-  $.get(API_URL, (data, textStatus) => {
-    if (textStatus === 'success' && data.status === 'OK') {
-      $('#api_status').addClass('available');
-    } else {
-      $('#api_status').removeClass('available');
-    }
-  });
-}
-
-function searchPlaces () {
-  const PLACES_URL = `http://${HOST}:5001/api/v1/places_search/`;
-  $.ajax({
-    url: PLACES_URL,
-    type: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    data: JSON.stringify({
-      amenities: Object.values(amenityObj),
-      states: Object.values(stateObj),
-      cities: Object.values(cityObj)
-    }),
-    success: function (response) {
-      $('SECTION.places').empty();
-      for (const r of response) {
-        const article = ['<article>',
-          '<div class="title_box">',
-          `<h2>${r.name}</h2>`,
-          `<div class="price_by_night">$${r.price_by_night}</div>`,
-          '</div>',
-          '<div class="information">',
-          `<div class="max_guest">${r.max_guest} Guest(s)</div>`,
-          `<div class="number_rooms">${r.number_rooms} Bedroom(s)</div>`,
-          `<div class="number_bathrooms">${r.number_bathrooms} Bathroom(s)</div>`,
-          '</div>',
-          '<div class="description">',
-          `${r.description}`,
-          '</div>',
-          '<div class="reviews"><h2>',
-          `<span id="${r.id}n" class="treview">Reviews</span>`,
-          `<span id="${r.id}" onclick="showReviews(this)">Show</span></h2>`,
-          `<ul id="${r.id}r"></ul>`,
-          '</div>',
-          '</article>'];
-        $('SECTION.places').append(article.join(''));
-      }
-    },
-    error: function (error) {
-      console.log(error);
-    }
-  });
-}
-
-function showReviews (obj) {
-  if (obj === undefined) {
-    return;
-  }
-  if (obj.textContent === 'Show') {
-    obj.textContent = 'Hide';
-    $.get(`http://${HOST}:5001/api/v1/places/${obj.id}/reviews`, (data, textStatus) => {
-      if (textStatus === 'success') {
-        $(`#${obj.id}n`).html(data.length + ' Reviews');
-        for (const review of data) {
-          printReview(review, obj);
-        }
+    $.get('http://0.0.0.0:5001/api/v1/status/', data => {
+      if (data.status === 'OK') {
+        $('#api_status').addClass('available');
+      } else {
+        $('#api_status').removeClass('available');
       }
     });
-  } else {
-    obj.textContent = 'Show';
-    $(`#${obj.id}n`).html('Reviews');
-    $(`#${obj.id}r`).empty();
-  }
-}
 
-function printReview (review, obj) {
-  const date = new Date(review.created_at);
-  const month = date.toLocaleString('en', { month: 'long' });
-  const day = dateOrdinal(date.getDate());
+    $.getJSON('http://0.0.0.0:5001/api/v1/users', data => data.forEach(user => users[user.id] = `${user.first_name} ${user.last_name}`));
 
-  if (review.user_id) {
-    $.get(`http://${HOST}:5001/api/v1/users/${review.user_id}`, (data, textStatus) => {
-      if (textStatus === 'success') {
-        $(`#${obj.id}r`).append(
-          `<li><h3>From ${data.first_name} ${data.last_name} the ${day + ' ' + month + ' ' + date.getFullYear()}</h3>
-          <p>${review.text}</p>
-          </li>`);
+    $.ajax({
+      method: 'POST',
+      url: 'http://0.0.0.0:5001/api/v1/places_search/',
+      data: '{}',
+      dataType: 'json',
+      contentType: 'application/json',
+      success: function (places) {
+        setPlaces(places)
+      },
+    });
+
+    $('.locations > .popover > ul > li > input[type=checkbox]').on('change', function () {
+      if ($(this).is(':checked')) {
+        checkedStates[$(this).data('id')] = $(this).data('name');
+        checkedLocations[$(this).data('id')] = $(this).data('name');
+      } else {
+        delete checkedStates[$(this).data('id')];
+        delete checkedLocations[$(this).data('id')];
+      }
+      const locations = Object.values(checkedLocations);
+      const locationsList = locations.join(', ').slice(0, 30);
+      $('.locations h4').html(locationsList.length > 0 ? `<em>${locationsList}</em>` : '&nbsp;');
+    });
+
+    $('.locations > .popover > ul > li > ul > li > input[type=checkbox]').on('change', function () {
+      if ($(this).is(':checked')) {
+        checkedCities[$(this).data('id')] = $(this).data('name');
+        checkedLocations[$(this).data('id')] = $(this).data('name');
+      } else {
+        delete checkedCities[$(this).data('id')];
+        delete checkedLocations[$(this).data('id')];
+      }
+      const locations = Object.values(checkedLocations);
+      const locationsList = locations.join(', ').slice(0, 30);
+      $('.locations h4').html(locationsList.length > 0 ? `<em>${locationsList}</em>` : '&nbsp;');
+    });
+
+    $('.amenities > .popover > ul > li > input[type=checkbox]').on('change', function () {
+      if ($(this).is(':checked')) {
+        checkedAmenities[$(this).data('id')] = $(this).data('name');
+      } else {
+        delete checkedAmenities[$(this).data('id')];
+      }
+      const amenities = Object.values(checkedAmenities);
+      const amenitiesList = amenities.join(', ').slice(0, 30);
+      $('.amenities h4').html(amenitiesList.length > 0 ? `<em>${amenitiesList}</em>` : '&nbsp;');
+    });
+
+    $('button').on('click', e => {
+      e.preventDefault();
+      const payload = {
+        amenities: Object.keys(checkedAmenities),
+        states: Object.keys(checkedStates),
+        cities: Object.keys(checkedCities),
+      };
+      $('article').remove();
+      $.ajax({
+        method: 'POST',
+        url: 'http://0.0.0.0:5001/api/v1/places_search/',
+        data: JSON.stringify(payload),
+        dataType: 'json',
+        contentType: 'application/json',
+        success: function (places) {
+          setPlaces(places)
+        },
+      });
+    });
+
+    $(document).on('click', 'span.toggle', function (e) {
+      const ul = $(this).parent().parent().children('div').children('ul').last();
+      if ($(this).text() === 'Show') {
+        $(this).text('Hide');
+        $.get(`http://0.0.0.0:5001/api/v1/places/${$(this).data('id')}/reviews`, data => {
+            const len = Object.keys(data).length;
+            $(this).parent().children('span.num').text(`${len} Review${len !== 1 ? 's' : ''}`);
+            ul.empty();
+            data.forEach(review => {
+              const datestr = (new Date(Date.parse(review.updated_at))).toDateString();
+              const html = `<li>
+                <h3>From ${users[review.user_id]} the ${datestr}</h3>
+                <p>${review.text}</p>
+              </li>`
+              ul.append(html);
+              ul.show();
+            });
+          });
+      } else {
+        $(this).parent().children('span.num').text('Reviews');
+        $(this).text('Show');
+        ul.hide();
       }
     });
-  }
-}
 
-function dateOrdinal (dom) {
-  if (dom === 31 || dom === 21 || dom === 1) return dom + 'st';
-  else if (dom === 22 || dom === 2) return dom + 'nd';
-  else if (dom === 23 || dom === 3) return dom + 'rd';
-  else return dom + 'th';
-}
+    const setPlaces = places => {
+      places.forEach(place => {
+        const s = place.max_guest !== 1 ? 's' : '';
+        const s2 = place.number_rooms !== 1 ? 's' : '';
+        const s3 = place.number_bathrooms !== 1 ? 's' : '';
+        const html = `<article>
+          <div class="title_box">
+            <h2>${place.name}</h2>
+            <div class="price_by_night">$${place.price_by_night}</div>
+          </div>
+          <div class="information">
+            <div class="max_guest">${place.max_guest} Guest${s}</div>
+            <div class="number_rooms">${place.number_rooms} Bedroom${s2}</div>
+            <div class="number_bathrooms">${place.number_bathrooms} Bathroom${s3}</div>
+          </div>
+          <div class="user"><strong>Owner:</strong> ${users[place.user_id]}</div>
+          <div class="description">${place.description}</div>
+          <div class="reviews">
+            <h2><span class="num">Reviews</span> <span class="toggle" data-id="${place.id}">Show</span></h2>
+            <div class="reviews_pad">
+              <ul></ul>
+            </div>
+          </div>
+        </article>`;
+        $('section.places').append(html);
+      });
+    };
+  });
